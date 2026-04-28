@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+<script>
+
+function fullurlencode(input) {
+
+// Build dictionary for all ASCII characters (0–255)
+
+let dict = {};
+
+for (let i = 0; i < 256; i++) {
+
+let hex = i.toString(16).toUpperCase().padStart(2, "0");
+
+dict[String.fromCharCode(i)] = "%" + hex;
+
+}
+
+
+// Encode input string manually
+
+let result = "";
+
+for (let char of input) {
+
+result += dict[char] || char;
+
+}
+
+
+return result;
+
+}
+
+</script>
+
+<meta charset="UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Pastebin Monitor</title>
+
+<style>
+
+body {
+
+font-family: system-ui, -apple-system, sans-serif;
+
+padding: 20px;
+
+background-color: #f9f9f9;
+
+color: #333;
+
+}
+
+.container {
+
+background: white;
+
+padding: 20px;
+
+border-radius: 8px;
+
+box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+
+max-width: 400px;
+
+}
+
+button {
+
+background-color: #0056b3;
+
+color: white;
+
+border: none;
+
+padding: 10px 15px;
+
+border-radius: 4px;
+
+cursor: pointer;
+
+font-size: 16px;
+
+}
+
+button:hover {
+
+background-color: #004494;
+
+}
+
+#status {
+
+margin-top: 15px;
+
+font-size: 14px;
+
+color: #555;
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+
+<div class="container">
+
+<h3>Pastebin Monitor</h3>
+
+<p>Click below to grant notification permissions and start polling the Pastebin file.</p>
+
+<button id="startBtn">Start Monitoring</button>
+
+<div id="status">Status: Waiting to start...</div>
+
+</div>
+
+
+<script>
+
+// --- Configuration ---
+
+// 1. Put your raw Pastebin URL here
+
+const PASTEBIN_RAW_URL = 'https://pastebin.com/raw/SAmxi51j'; 
+
+
+// 2. Set polling interval in milliseconds (e.g., 60000 = 1 minute)
+
+// Warning: Setting this too fast may cause Pastebin to rate-limit your IP.
+
+const POLL_INTERVAL = 25000; 
+
+
+// 3. CORS Proxy (Uncomment the line below if Pastebin blocks the direct fetch)
+
+// const fetchUrl = `https://patient-math-6a21.jxxgc315.workers.dev/?${fullurlencode(fullurlencode(PASTEBIN_RAW_URL))}`;
+
+const fetchUrl = PASTEBIN_RAW_URL; 
+
+
+// --- State Variables ---
+
+let previousContent = null;
+
+let monitorInterval = null;
+
+const statusEl = document.getElementById('status');
+
+const startBtn = document.getElementById('startBtn');
+
+
+// --- Core Logic ---
+
+
+// Request permission and start the loop
+
+startBtn.addEventListener('click', async () => {
+
+if (!("Notification" in window)) {
+
+statusEl.textContent = "Status: This browser does not support desktop notifications.";
+
+return;
+
+}
+
+
+const permission = await Notification.requestPermission();
+
+if (permission === "granted") {
+
+startBtn.disabled = true;
+
+startBtn.textContent = "Monitoring Active";
+
+statusEl.textContent = "Status: Fetching initial data...";
+
+// Fetch immediately, then start the interval
+
+checkPastebin(); 
+
+monitorInterval = setInterval(checkPastebin, POLL_INTERVAL);
+
+} else {
+
+statusEl.textContent = "Status: Notification permission denied.";
+
+}
+
+});
+
+
+// The polling function
+
+async function checkPastebin() {
+
+try {
+
+// Add a cache-buster query parameter to ensure we don't get a locally cached response
+
+const response = await fetch(`${fetchUrl}${fetchUrl.includes('?') ? '&' : '?'}cb=${Date.now()}`);
+
+if (!response.ok) {
+
+throw new Error(`HTTP error! status: ${response.status}`);
+
+}
+
+
+const currentContent = await response.text();
+
+
+// If previousContent is null, it's the first fetch. Just save the state, don't notify.
+
+if (previousContent !== null && currentContent !== previousContent) {
+
+sendNotification("Pastebin Updated!", currentContent);
+
+}
+
+
+previousContent = currentContent;
+
+statusEl.textContent = `Status: Active. Last checked at ${new Date().toLocaleTimeString()}`;
+
+
+} catch (error) {
+
+console.error("Error fetching Pastebin:", error);
+
+statusEl.textContent = `Status: Error checking pastebin. Check console.`;
+
+}
+
+}
+
+
+// Trigger the browser notification
+
+function sendNotification(title, body) {
+
+const notification = new Notification(title, {
+
+body: body,
+
+requireInteraction: true // Keeps the notification on screen until the user dismisses it
+
+});
+
+
+// Clicking the notification opens the Pastebin URL in a new tab
+
+notification.onclick = function() {
+
+window.open(PASTEBIN_RAW_URL, '_blank');
+
+};
+
+}
+
+</script>
+
+</body>
+
+</html>
+
